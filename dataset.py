@@ -65,6 +65,16 @@ class Drive360(object):
         self.use_data = self.config['data']
         self.right_left = config['multi_camera']['right_left']
         self.rear = config['multi_camera']['rear']
+        
+        # down sampling over time
+        if self.config['data_loader'].get('down_sample_time') is None:
+            self.use_downsample = False
+            self.downsample_freq = 1
+            self.downsample_offset = 0
+        else:
+            self.use_downsample = self.config['data_loader']['down_sample_time'].get("use")
+            self.downsample_freq = self.config['data_loader']['down_sample_time'].get("frequency")
+            self.downsample_offset = self.config['data_loader']['down_sample_time'].get("offset")
 
         #### reading in dataframe from csv #####
         self.dataframe = pd.read_csv(os.path.join(self.data_dir, self.csv_name),
@@ -96,7 +106,17 @@ class Drive360(object):
 
         self.sequence_length = self.history_number*self.history_frequency
         max_temporal_history = self.sequence_length
-        self.indices = self.dataframe.groupby('chapter').apply(lambda x: x.iloc[max_temporal_history:]).index.droplevel(level=0).tolist()
+        
+        # remove the first `max_temporal_history` timesteps of each chapter from the indices,
+        # and apply down sampling over time if specified
+        if self.use_downsample:
+            self.indices = self.dataframe.groupby('chapter').apply(
+                lambda x: x.iloc[max_temporal_history + self.downsample_offset::self.downsample_freq]
+            ).index.droplevel(level=0).tolist()
+        else:
+            self.indices = self.dataframe.groupby('chapter').apply(
+                lambda x: x.iloc[max_temporal_history:]
+            ).index.droplevel(level=0).tolist()
 
         #### phase specific manipulation #####
         if phase == 'train':
@@ -124,6 +144,10 @@ class Drive360(object):
             
             if 'sample1' in self.data_dir.lower() or 'sample2' in self.data_dir.lower() or 'sample3' in self.data_dir.lower():
                 pass
+            elif self.use_downsample:
+                self.indices = self.dataframe.groupby('chapter').apply(
+                    lambda x: x.iloc[100 + self.downsample_offset::self.downsample_freq]
+                ).index.droplevel(level=0).tolist()
             else:
                 self.indices = self.dataframe.groupby('chapter').apply(
                     lambda x: x.iloc[100:]).index.droplevel(
@@ -133,7 +157,6 @@ class Drive360(object):
                 self.dataframe['canSteering'] = [0.0 for _ in range(len(self.dataframe))]
             if 'canSpeed' not in self.dataframe.columns:
                 self.dataframe['canSpeed'] = [0.0 for _ in range(len(self.dataframe))]
-
 
         if self.normalize_targets and not phase == 'test':
             self.dataframe['canSteering'] = (self.dataframe['canSteering'].values -
