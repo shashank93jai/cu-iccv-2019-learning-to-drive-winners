@@ -77,6 +77,7 @@ class Drive360(object):
             self.downsample_offset = self.config['data_loader']['down_sample_time'].get("offset")
 
         #### reading in dataframe from csv #####
+        print("Loading data from {}...".format(os.path.join(self.data_dir, self.csv_name)))
         self.dataframe = pd.read_csv(os.path.join(self.data_dir, self.csv_name),
                                      dtype={'cameraFront': object,
                                             'cameraRear': object,
@@ -133,10 +134,10 @@ class Drive360(object):
             # self.indices = list(set(self.indices) & set(bin_indices))
             ## END ##
 
-        elif phase == 'validation':
+        elif phase == 'validation' or phase == 'test':
             self.dataframe['canSteering'] = np.clip(self.dataframe['canSteering'], a_max=360, a_min=-360)
 
-        elif phase == 'test':
+        """elif phase == 'test':
             # IMPORTANT: for the test phase indices will start 10s (100 samples) into each chapter
             # this is to allow challenge participants to experiment with different temporal settings of data input.
             # If challenge participants have a greater temporal length than 10s for each training sample, then they
@@ -156,9 +157,10 @@ class Drive360(object):
             if 'canSteering' not in self.dataframe.columns:
                 self.dataframe['canSteering'] = [0.0 for _ in range(len(self.dataframe))]
             if 'canSpeed' not in self.dataframe.columns:
-                self.dataframe['canSpeed'] = [0.0 for _ in range(len(self.dataframe))]
+                self.dataframe['canSpeed'] = [0.0 for _ in range(len(self.dataframe))]"""
 
-        if self.normalize_targets and not phase == 'test':
+        #if self.normalize_targets and not phase == 'test':
+        if self.normalize_targets:
             self.dataframe['canSteering'] = (self.dataframe['canSteering'].values -
                                             self.target_mean['canSteering']) / self.target_std['canSteering']
             self.dataframe['canSpeed'] = (self.dataframe['canSpeed'].values -
@@ -166,8 +168,6 @@ class Drive360(object):
 
         if self.shuffle:
             shuffle(self.indices)
-
-
 
         print('Phase:', phase, '# of data:', len(self.indices))
 
